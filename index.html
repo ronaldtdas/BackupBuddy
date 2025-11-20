@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Buddy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for code blocks */
+        .code-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .code-scroll::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        .code-scroll::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        .code-scroll::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-md">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                </svg>
+                <h1 class="text-xl font-bold text-white">Backup Buddy</h1>
+            </div>
+            <div class="text-sm text-slate-400">For Git Status & File Lists</div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+
+        <!-- Input Section -->
+        <section class="bg-slate-800 rounded-lg shadow-lg border border-slate-700 p-6">
+            <label for="inputArea" class="block text-sm font-medium text-blue-400 mb-2 uppercase tracking-wider">
+                1. Paste File List (Raw or Git Status)
+            </label>
+            <textarea id="inputArea" 
+                class="w-full h-48 bg-slate-900 text-slate-300 border border-slate-600 rounded-md p-4 font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="modified:   public_html/mng/index.php&#10;modified:   webdata/conf/config.inc&#10;..."></textarea>
+            
+            <div class="mt-4 flex flex-wrap gap-3">
+                <button onclick="generateCommands()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-md font-medium transition shadow-lg hover:shadow-blue-500/20 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Generate Commands
+                </button>
+                <button onclick="clearAll()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-md font-medium transition">
+                    Clear
+                </button>
+            </div>
+        </section>
+
+        <!-- Output Section -->
+        <section id="outputSection" class="grid md:grid-cols-2 gap-6 hidden opacity-0 transition-opacity duration-500">
+            
+            <!-- Backup Column -->
+            <div class="bg-slate-800 rounded-lg shadow-lg border border-slate-700 flex flex-col overflow-hidden">
+                <div class="bg-slate-900/50 p-3 border-b border-slate-700 flex justify-between items-center">
+                    <h2 class="text-emerald-400 font-medium flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                        Backup Commands (.backup)
+                    </h2>
+                    <button onclick="copyToClipboard('backupOutput', 'backupCopyBtn')" id="backupCopyBtn" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-white transition">
+                        Copy
+                    </button>
+                </div>
+                <pre id="backupOutput" class="code-scroll p-4 text-sm font-mono text-emerald-100 whitespace-pre overflow-x-auto flex-grow bg-[#0f172a]"></pre>
+            </div>
+
+            <!-- Restore Column -->
+            <div class="bg-slate-800 rounded-lg shadow-lg border border-slate-700 flex flex-col overflow-hidden">
+                <div class="bg-slate-900/50 p-3 border-b border-slate-700 flex justify-between items-center">
+                    <h2 class="text-rose-400 font-medium flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Restore Commands (Revert)
+                    </h2>
+                    <button onclick="copyToClipboard('restoreOutput', 'restoreCopyBtn')" id="restoreCopyBtn" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-white transition">
+                        Copy
+                    </button>
+                </div>
+                <pre id="restoreOutput" class="code-scroll p-4 text-sm font-mono text-rose-100 whitespace-pre overflow-x-auto flex-grow bg-[#0f172a]"></pre>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-blue-600 text-white px-6 py-3 rounded shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 font-medium">
+        Copied to clipboard!
+    </div>
+
+    <script>
+        function generateCommands() {
+            const rawInput = document.getElementById('inputArea').value;
+            if (!rawInput.trim()) return;
+
+            const lines = rawInput.split('\n');
+            let backupCommands = [];
+            let restoreCommands = [];
+
+            lines.forEach(line => {
+                // 1. Trim leading/trailing whitespace (This fixes the indentation issue)
+                let cleanPath = line.trim();
+
+                // 2. Remove common git prefixes (modified:, etc.)
+                // Now that the string starts with the text, the ^ anchor works correctly
+                cleanPath = cleanPath
+                    .replace(/^(modified:|new file:|deleted:|renamed:|Untracked files:)\s+/i, '')
+                    .trim();
+
+                // Skip empty lines
+                if (!cleanPath) return;
+
+                // Handle paths with spaces by checking if spaces exist and wrapping in quotes if not already wrapped
+                if (cleanPath.includes(' ') && !cleanPath.startsWith('"') && !cleanPath.startsWith("'")) {
+                    cleanPath = `"${cleanPath}"`;
+                }
+
+                // Generate commands
+                backupCommands.push(`mv ${cleanPath} ${cleanPath}.backup`);
+                restoreCommands.push(`mv ${cleanPath}.backup ${cleanPath}`);
+            });
+
+            // Display outputs
+            const backupEl = document.getElementById('backupOutput');
+            const restoreEl = document.getElementById('restoreOutput');
+            const outputSection = document.getElementById('outputSection');
+
+            if (backupCommands.length > 0) {
+                backupEl.textContent = backupCommands.join('\n');
+                restoreEl.textContent = restoreCommands.join('\n');
+                
+                outputSection.classList.remove('hidden');
+                setTimeout(() => {
+                    outputSection.classList.remove('opacity-0');
+                }, 10);
+            } else {
+                backupEl.textContent = "# No valid paths found.";
+                restoreEl.textContent = "# No valid paths found.";
+                outputSection.classList.remove('hidden', 'opacity-0');
+            }
+        }
+
+        function clearAll() {
+            document.getElementById('inputArea').value = '';
+            const outputSection = document.getElementById('outputSection');
+            outputSection.classList.add('opacity-0');
+            setTimeout(() => {
+                outputSection.classList.add('hidden');
+                document.getElementById('backupOutput').textContent = '';
+                document.getElementById('restoreOutput').textContent = '';
+            }, 300);
+        }
+
+        function copyToClipboard(elementId, btnId) {
+            const text = document.getElementById(elementId).textContent;
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast();
+                
+                const btn = document.getElementById(btnId);
+                const originalText = btn.innerText;
+                btn.innerText = "Copied!";
+                btn.classList.add("bg-green-600", "text-white");
+                btn.classList.remove("bg-slate-700");
+                
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.classList.remove("bg-green-600", "text-white");
+                    btn.classList.add("bg-slate-700");
+                }, 2000);
+            } catch (err) {
+                console.error('Unable to copy', err);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
