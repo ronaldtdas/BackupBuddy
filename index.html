@@ -100,7 +100,41 @@
 
         </section>
 
+        <!-- History Section -->
+        <section class="mt-8">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-300 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Recent History
+                </h3>
+                <button onclick="clearHistory()" class="text-sm text-slate-400 hover:text-rose-400 transition flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Clear History
+                </button>
+            </div>
+            
+            <div id="historyList" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- History cards injected via JS -->
+            </div>
+        </section>
+
     </main>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 max-w-sm w-full shadow-2xl transform scale-95 transition-transform duration-300">
+            <h3 class="text-lg font-bold text-white mb-2">Clear History</h3>
+            <p class="text-slate-400 text-sm mb-6">Are you sure you want to clear your entire history? This action cannot be undone.</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition">Cancel</button>
+                <button onclick="confirmClearHistory()" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-md text-sm font-medium transition shadow-lg hover:shadow-rose-500/20">Yes, Clear it</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-5 right-5 bg-blue-600 text-white px-6 py-3 rounded shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 font-medium">
@@ -108,6 +142,12 @@
     </div>
 
     <script>
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderHistory();
+        });
+
+        // --- Core Application Logic ---
         function generateCommands() {
             const rawInput = document.getElementById('inputArea').value;
             if (!rawInput.trim()) return;
@@ -117,41 +157,40 @@
             let restoreCommands = [];
 
             lines.forEach(line => {
-                // 1. Trim leading/trailing whitespace (This fixes the indentation issue)
                 let cleanPath = line.trim();
 
-                // 2. Remove common git prefixes (modified:, etc.)
-                // Now that the string starts with the text, the ^ anchor works correctly
                 cleanPath = cleanPath
                     .replace(/^(modified:|new file:|deleted:|renamed:|Untracked files:)\s+/i, '')
                     .trim();
 
-                // Skip empty lines
                 if (!cleanPath) return;
 
-                // Handle paths with spaces by checking if spaces exist and wrapping in quotes if not already wrapped
                 if (cleanPath.includes(' ') && !cleanPath.startsWith('"') && !cleanPath.startsWith("'")) {
                     cleanPath = `"${cleanPath}"`;
                 }
 
-                // Generate commands
                 backupCommands.push(`mv ${cleanPath} ${cleanPath}.backup`);
                 restoreCommands.push(`mv ${cleanPath}.backup ${cleanPath}`);
             });
 
-            // Display outputs
             const backupEl = document.getElementById('backupOutput');
             const restoreEl = document.getElementById('restoreOutput');
             const outputSection = document.getElementById('outputSection');
 
+            const backupStr = backupCommands.join('\n');
+            const restoreStr = restoreCommands.join('\n');
+
             if (backupCommands.length > 0) {
-                backupEl.textContent = backupCommands.join('\n');
-                restoreEl.textContent = restoreCommands.join('\n');
+                backupEl.textContent = backupStr;
+                restoreEl.textContent = restoreStr;
                 
                 outputSection.classList.remove('hidden');
                 setTimeout(() => {
                     outputSection.classList.remove('opacity-0');
                 }, 10);
+
+                // Save to history automatically
+                saveToHistory(rawInput, backupStr, restoreStr);
             } else {
                 backupEl.textContent = "# No valid paths found.";
                 restoreEl.textContent = "# No valid paths found.";
@@ -170,6 +209,7 @@
             }, 300);
         }
 
+        // --- UI & Clipboard Interactions ---
         function copyToClipboard(elementId, btnId) {
             const text = document.getElementById(elementId).textContent;
             const textArea = document.createElement("textarea");
@@ -211,6 +251,139 @@
             setTimeout(() => {
                 toast.classList.add('translate-y-20', 'opacity-0');
             }, 2000);
+        }
+
+        // --- History / Local Storage System ---
+        function getHistory() {
+            return JSON.parse(localStorage.getItem('backupBuddyHistory') || '[]');
+        }
+
+        function saveToHistory(rawInput, backupStr, restoreStr) {
+            let history = getHistory();
+            
+            // Prevent immediate duplicates if the input is exactly the same as the last item
+            if (history.length > 0 && history[0].rawInput === rawInput) {
+                return;
+            }
+
+            const now = new Date();
+            const dateOptions = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+
+            const newItem = {
+                id: Date.now(),
+                timestamp: now.toLocaleString(undefined, dateOptions),
+                rawInput: rawInput,
+                backupStr: backupStr,
+                restoreStr: restoreStr
+            };
+
+            history.unshift(newItem); // Add to beginning
+            
+            // Limit history to 20 items to save space
+            if (history.length > 20) {
+                history = history.slice(0, 20);
+            }
+
+            localStorage.setItem('backupBuddyHistory', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyList');
+            const history = getHistory();
+
+            if (history.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-slate-500 text-sm italic bg-slate-800/50 rounded-lg p-6 text-center border border-slate-700/50 shadow-inner">No history yet. Generate some commands to see them here!</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(item => {
+                // Escape HTML tags to prevent XSS issues in preview
+                const safeInput = item.rawInput.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                
+                return `
+                <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 shadow-md flex flex-col gap-3 transition hover:border-slate-600">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs text-slate-400 font-medium flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            ${item.timestamp}
+                        </span>
+                        <button onclick="deleteHistory(${item.id})" class="text-slate-500 hover:text-rose-400 transition" title="Delete">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="text-xs font-mono text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50 h-16 overflow-hidden relative">
+                        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/90 top-8 pointer-events-none"></div>
+                        ${safeInput.replace(/\n/g, '<br>')}
+                    </div>
+                    
+                    <button onclick="loadHistory(${item.id})" class="mt-auto w-full bg-slate-700 hover:bg-blue-600 text-white text-sm py-1.5 rounded font-medium transition duration-200">
+                        Load in Editor
+                    </button>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function loadHistory(id) {
+            const history = getHistory();
+            const item = history.find(i => i.id === id);
+            
+            if (!item) return;
+
+            // Load values back into UI
+            document.getElementById('inputArea').value = item.rawInput;
+            document.getElementById('backupOutput').textContent = item.backupStr;
+            document.getElementById('restoreOutput').textContent = item.restoreStr;
+
+            // Show output section
+            const outputSection = document.getElementById('outputSection');
+            outputSection.classList.remove('hidden');
+            setTimeout(() => {
+                outputSection.classList.remove('opacity-0');
+            }, 10);
+
+            // Scroll smoothly to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteHistory(id) {
+            let history = getHistory();
+            history = history.filter(item => item.id !== id);
+            localStorage.setItem('backupBuddyHistory', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function clearHistory() {
+            const history = getHistory();
+            if (history.length === 0) return;
+            
+            const modal = document.getElementById('confirmModal');
+            modal.classList.remove('hidden');
+            // Trigger reflow for transition
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            modal.firstElementChild.classList.remove('scale-95');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('confirmModal');
+            modal.classList.add('opacity-0');
+            modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function confirmClearHistory() {
+            localStorage.removeItem('backupBuddyHistory');
+            renderHistory();
+            closeModal();
         }
     </script>
 </body>
